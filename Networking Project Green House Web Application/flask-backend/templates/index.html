@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Greenhouse Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&family=Open+Sans:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: cursive;
+        margin: 20px;
+        background-image: url('{{ url_for("static", filename="3.jpg") }}');
+        background-position: center;
+        background-size: cover;
+        color: #333;
+        backdrop-filter: contrast(0.4);
+      }
+
+      body.dark-mode {
+        background: linear-gradient(135deg, #1f1f1f, #121212);
+        color: white;
+      }
+
+      .dashboard-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        z-index: 10;
+      }
+
+      .card {
+        border: none;
+        border-radius: 15px;
+        padding: 15px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        background: rgba(255, 255, 255, 0.85);
+        transition: transform 0.3s, box-shadow 0.3s;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        font-size: 1.2rem;
+      }
+
+      .card.dark-mode {
+        background: rgba(45, 45, 45, 0.85);
+      }
+
+      .icon {
+        font-size: 2rem;
+        margin-right: 10px;
+      }
+
+      .chart-container {
+        width: 100%;
+        height: 200px;
+        position: relative;
+      }
+
+      .status-badge {
+        padding: 10px 20px;
+        border-radius: 25px;
+        color: white;
+        font-weight: bold;
+      }
+
+      .status-good {
+        background-color: #28a745;
+      }
+
+      .status-moderate {
+        background-color: #ffc107;
+      }
+
+      .status-poor {
+        background-color: #dc3545;
+      }
+
+      .lamp {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: gray;
+        margin: 15px auto;
+      }
+
+      .lamp.on {
+        background-color: yellow;
+      }
+
+      .motion-icon {
+        font-size: 3rem;
+        color: green;
+      }
+
+      .motion-icon.off {
+        color: red;
+      }
+
+      .light-dark-toggle {
+        cursor: pointer;
+        padding: 10px 15px;
+        border-radius: 50px;
+        background: #333;
+        color: white;
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+      }
+
+      .light-dark-toggle.dark {
+        background: white;
+        color: black;
+      }
+
+      .download-button {
+        margin-top: 15px;
+        padding: 10px;
+        font-size: 1rem;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-block;
+        margin-left: 20px;
+      }
+
+      .download-button:hover {
+        background: #0056b3;
+      }
+
+      .relay-status {
+        font-size: 1.2rem;
+        margin-top: 10px;
+      }
+
+      .relay-on {
+        color: green;
+      }
+
+      .relay-off {
+        color: red;
+      }
+
+      .relay-reason {
+        font-style: italic;
+        margin-top: 5px;
+      }
+
+      .system-thresholds {
+        font-size: 1.1rem;
+        margin-top: 15px;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 8px;
+      }
+
+      .system-thresholds span {
+        margin-right: 20px;
+      }
+      .header {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 2rem;
+        color: #000;
+      }
+      .container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+      }
+      .real-time-date-time {
+        padding-bottom: 2rem;
+      }
+      .headercard {
+        font-size: 1.2rem;
+        font-weight: 800;
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.5);
+      }
+      .modal-content {
+        background-color: white;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 500px;
+        border-radius: 8px;
+      }
+      .modal-header {
+        font-size: 1.5rem;
+        margin-bottom: 10px;
+      }
+      .modal-footer {
+        margin-top: 20px;
+        display: flex;
+        justify-content: space-between;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="light-dark-toggle" onclick="toggleTheme()">🌙</div>
+    <div class="container text-center">
+      <h1 class="header" id="header">🌱 Greenhouse Dashboard</h1>
+
+      <!-- Real-Time Date and Time -->
+      <div class="real-time-date-time" id="realTimeClock"></div>
+      <button class="btn btn-secondary mb-3" onclick="openSettingsModal()">
+        ⚙️ Settings
+      </button>
+
+      <div class="dashboard-container">
+        <!-- Temperature Card -->
+        <div class="card">
+          <h3 class="headercard">
+            <i class="fas fa-thermometer-half icon"></i> Temperature
+          </h3>
+          <p id="temperatureValue">-- °C</p>
+        </div>
+
+        <!-- Humidity Card -->
+        <div class="card">
+          <h3 class="headercard"><i class="fas fa-tint icon"></i> Humidity</h3>
+          <p id="humidityValue">-- %</p>
+        </div>
+
+        <!-- Distance Card -->
+        <div class="card">
+          <h3 class="headercard">Distance</h3>
+          <p id="distanceValue">-- cm</p>
+        </div>
+
+        <!-- Motion Card -->
+        <div class="card">
+          <h3 class="headercard">Motion</h3>
+          <div id="motionIcon" class="motion-icon">⛔</div>
+        </div>
+
+        <!-- Environment Status Card -->
+        <div class="card">
+          <h3 class="headercard">Environment Status</h3>
+          <span id="environmentStatus" class="status-badge">--</span>
+        </div>
+
+        <!-- Temperature Trend Card -->
+        <div class="card">
+          <h3 class="headercard">Temperature Trend</h3>
+          <div class="chart-container">
+            <canvas id="temperatureChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Humidity Trend Card -->
+        <div class="card">
+          <h3 class="headercard">Humidity Trend</h3>
+          <div class="chart-container">
+            <canvas id="humidityChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Relay Control Card -->
+        <div class="card">
+          <h3 class="headercard">Relay Control</h3>
+          <div id="lamp" class="lamp"></div>
+          <!-- <button
+            id="relayToggle"
+            class="btn btn-primary"
+            onclick="toggleLamp()"
+          >
+            Toggle Relay
+          </button> -->
+          <div id="relayState" class="relay-status">State: OFF</div>
+          <div id="relayReason" class="relay-reason">
+            Reason: No conditions met.
+          </div>
+        </div>
+      </div>
+
+      <div class="system-thresholds">
+        <span>Min Temp: <span id="minTemp">25</span>°C</span>
+        <span>Max Temp: <span id="maxTemp">40</span>°C</span>
+        <span>Min Humid: <span id="minHumid">30</span>%</span>
+        <span>Max Humid: <span id="maxHumid">70</span>%</span>
+      </div>
+
+      <button class="download-button" onclick="downloadCSV()">
+        Download CSV
+      </button>
+    </div>
+    <div id="settingsModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">Settings</div>
+        <div class="modal-body">
+          <label for="minTempInput">Min Temperature (°C):</label>
+          <input type="number" id="minTempInput" class="form-control" />
+
+          <label for="maxTempInput" class="mt-2">Max Temperature (°C):</label>
+          <input type="number" id="maxTempInput" class="form-control" />
+
+          <label for="minHumidInput" class="mt-2">Min Humidity (%):</label>
+          <input type="number" id="minHumidInput" class="form-control" />
+
+          <label for="maxHumidInput" class="mt-2">Max Humidity (%):</label>
+          <input type="number" id="maxHumidInput" class="form-control" />
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+          <button class="btn btn-secondary" onclick="closeSettingsModal()">
+            Close
+          </button>
+          <button class="btn btn-danger" onclick="logout()">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let temperatureData = [];
+      let humidityData = [];
+      let distanceData = [];
+      let motionData = [];
+      let relayStateData = [];
+      let relayReasonData = [];
+      let dateData = [];
+      let timeData = [];
+
+      let mintemp = 25;
+      let maxtemp = 40;
+      let minhumid = 30;
+      let maxhumid = 70;
+
+      function openSettingsModal() {
+        document.getElementById("minTempInput").value = mintemp;
+        document.getElementById("maxTempInput").value = maxtemp;
+        document.getElementById("minHumidInput").value = minhumid;
+        document.getElementById("maxHumidInput").value = maxhumid;
+        document.getElementById("settingsModal").style.display = "block";
+      }
+
+      function closeSettingsModal() {
+        document.getElementById("settingsModal").style.display = "none";
+      }
+
+      function saveSettings() {
+        let newMinTemp = parseFloat(
+          document.getElementById("minTempInput").value
+        );
+        let newMaxTemp = parseFloat(
+          document.getElementById("maxTempInput").value
+        );
+        let newMinHumid = parseFloat(
+          document.getElementById("minHumidInput").value
+        );
+        let newMaxHumid = parseFloat(
+          document.getElementById("maxHumidInput").value
+        );
+
+        console.log(
+          `Settings updated: Min Temp=${newMinTemp}, Max Temp=${newMaxTemp}`
+        );
+        console.log(`Min Humidity=${newMinHumid}, Max Humidity=${newMaxHumid}`);
+        mintemp = newMinTemp;
+        maxtemp = newMaxTemp;
+        minhumid = newMinHumid;
+        maxhumid = newMaxHumid;
+        document.getElementById("minTemp").textContent = mintemp;
+        document.getElementById("maxTemp").textContent = maxtemp;
+        document.getElementById("minHumid").textContent = minhumid;
+        document.getElementById("maxHumid").textContent = maxhumid;
+
+        closeSettingsModal();
+        fetch("/api/settings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            minTemp: newMinTemp,
+            maxTemp: newMaxTemp,
+            minHumid: newMinHumid,
+            maxHumid: newMaxHumid,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("Settings saved to backend:", data);
+          })
+          .catch((error) => {
+            console.error("Error saving settings to backend:", error);
+          });
+      }
+
+      window.onclick = function (event) {
+        if (event.target == document.getElementById("settingsModal")) {
+          closeSettingsModal();
+        }
+      };
+
+      async function logout() {
+        try {
+          const response = await fetch("http://localhost:5000/logout", {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            alert(result.message);
+
+            window.location.href = "/login";
+          } else {
+            const error = await response.json();
+            alert(`Error: ${error.message}`);
+          }
+        } catch (err) {
+          console.error("Logout failed:", err);
+          alert("An error occurred during logout.");
+        }
+      }
+
+      function toggleTheme() {
+        document.body.classList.toggle("dark-mode");
+        const toggleButton = document.querySelector(".light-dark-toggle");
+        toggleButton.classList.toggle("dark");
+        toggleButton.textContent = document.body.classList.contains("dark-mode")
+          ? "☀️"
+          : "🌙";
+      }
+
+      function updateClock() {
+        const clockElement = document.getElementById("realTimeClock");
+        const now = new Date();
+        clockElement.textContent = now.toLocaleString();
+      }
+      setInterval(updateClock, 1000);
+
+      function fetchData() {
+        fetch("/api/data")
+          .then((response) => response.json())
+          .then((data) => {
+            document.getElementById("temperatureValue").textContent =
+              data.temperature + " °C";
+            document.getElementById("humidityValue").textContent =
+              data.humidity + " %";
+
+            document.getElementById("distanceValue").textContent =
+              data.distance + " cm";
+            if (data.motion === "Motion Detected") {
+              document.getElementById("motionIcon").textContent = "🚶‍♂️";
+            } else {
+              document.getElementById("motionIcon").textContent = "⛔";
+            }
+
+            const statusBadge = document.getElementById("environmentStatus");
+            if (data.temperature < 30 && data.humidity > 40) {
+              statusBadge.textContent = "Good";
+              statusBadge.className = "status-badge status-good";
+            } else if (data.temperature >= 30 || data.humidity < 40) {
+              statusBadge.textContent = "Moderate";
+              statusBadge.className = "status-badge status-moderate";
+            } else {
+              statusBadge.textContent = "Poor";
+              statusBadge.className = "status-badge status-poor";
+            }
+
+            const relayState = document.getElementById("relayState");
+            const relayReason = document.getElementById("relayReason");
+
+            let temp_state = "";
+            let humid_state = "";
+            let motion_state = data.motion ? "detected" : "not detected";
+            let distance_state = data.distance;
+
+            if (data.temperature > 25 && data.temperature < 40)
+              temp_state = "normal";
+            else if (data.temperature <= 25) temp_state = "low";
+            else temp_state = "high";
+
+            if (data.humidity > 30 && data.humidity < 70)
+              humid_state = "normal";
+            else if (data.humidity <= 30) humid_state = "low";
+            else humid_state = "high";
+
+            let relayStateValue, reason;
+
+            if (temp_state === "normal" && motion_state === "detected") {
+              relayStateValue = "ON";
+              reason = "Temperature normal and motion detected.";
+            } else if (temp_state === "low" || humid_state === "low") {
+              relayStateValue = "ON";
+              reason = "Temperature or humidity is low.";
+            } else if (
+              temp_state === "high" ||
+              humid_state === "high" ||
+              motion_state === "not detected"
+            ) {
+              relayStateValue = "OFF";
+              reason = "Temperature/humidity too high or no motion detected.";
+            } else if (distance_state !== null && distance_state < 10) {
+              relayStateValue = "ON";
+              reason = "Object detected within 10 units of distance.";
+            } else {
+              relayStateValue = "OFF";
+              reason = "Conditions do not match any ON state.";
+            }
+
+            relayState.textContent = `State: ${relayStateValue}`;
+            relayState.className = `relay-status relay-${relayStateValue.toLowerCase()}`;
+            relayReason.textContent = `Reason: ${reason}`;
+
+            const lamp = document.getElementById("lamp");
+            if (relayStateValue === "ON") {
+              lamp.classList.add("on");
+            } else {
+              lamp.classList.remove("on");
+            }
+
+            const now = new Date();
+            dateData.push(now.toLocaleDateString());
+            timeData.push(now.toLocaleTimeString());
+            temperatureData.push(data.temperature);
+            humidityData.push(data.humidity);
+            distanceData.push(data.distance);
+            motionData.push(
+              data.motion === "Motion Detected" ? "Detected" : "No Motion"
+            );
+            relayStateData.push(relayStateValue);
+            relayReasonData.push(reason);
+
+            updateCharts();
+          })
+          .catch((error) => console.error("Error fetching data: ", error));
+      }
+      setInterval(fetchData, 1000);
+
+      function updateCharts() {
+        if (temperatureChart.data.labels.length > 50) {
+          temperatureChart.data.labels.shift();
+          temperatureChart.data.datasets[0].data.shift();
+        }
+        temperatureChart.data.labels.push(new Date().toLocaleTimeString());
+        temperatureChart.data.datasets[0].data.push(
+          temperatureData[temperatureData.length - 1]
+        );
+        temperatureChart.update();
+
+        if (humidityChart.data.labels.length > 50) {
+          humidityChart.data.labels.shift();
+          humidityChart.data.datasets[0].data.shift();
+        }
+        humidityChart.data.labels.push(new Date().toLocaleTimeString());
+        humidityChart.data.datasets[0].data.push(
+          humidityData[humidityData.length - 1]
+        );
+        humidityChart.update();
+      }
+
+      function downloadCSV() {
+        let csvContent =
+          "data:text/csv;charset=utf-8,Date,Time,Temperature,Humidity,Distance,Motion,Relay State,Relay Reason\n";
+        for (let i = 0; i < dateData.length; i++) {
+          csvContent += `${dateData[i]},${timeData[i]},${temperatureData[i]},${humidityData[i]},${distanceData[i]},${motionData[i]},${relayStateData[i]},${relayReasonData[i]}\n`;
+        }
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "greenhouse_data.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      const temperatureChart = new Chart(
+        document.getElementById("temperatureChart"),
+        {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: "Temperature (°C)",
+                data: [],
+                borderColor: "rgba(255, 99, 132, 1)",
+                backgroundColor: "rgba(255, 99, 132, 0.2)",
+                fill: true,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+          },
+        }
+      );
+
+      const humidityChart = new Chart(
+        document.getElementById("humidityChart"),
+        {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: "Humidity (%)",
+                data: [],
+                borderColor: "rgba(54, 162, 235, 1)",
+                backgroundColor: "rgba(54, 162, 235, 0.2)",
+                fill: true,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+          },
+        }
+      );
+    </script>
+  </body>
+</html>
